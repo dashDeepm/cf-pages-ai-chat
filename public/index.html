@@ -74,7 +74,7 @@ header {
   cursor: pointer;
 }
 
-/* 历史记录弹窗样式 */
+/* 历史记录列表弹窗 */
 #history-modal {
   position: fixed;
   top: 0; left: 0; right:0; bottom:0;
@@ -96,7 +96,9 @@ header {
   border-bottom: 1px solid #ddd;
   margin-bottom: 10px;
   padding-bottom: 10px;
+  cursor: pointer;
 }
+.history-item:hover { background: #f0f0f0; }
 </style>
 </head>
 <body>
@@ -220,15 +222,21 @@ viewHistoryBtn.onclick = ()=>{
   historyContent.innerHTML = "";
   const keys = Object.keys(sessions).reverse().slice(0,100); // 最新100条会话
   keys.forEach(key=>{
+    const firstUserMsg = (sessions[key].find(m=>m.role==='user')?.content||"").slice(0,10);
     const div = document.createElement("div");
     div.className = "history-item";
-    div.innerHTML = `<strong>${key}</strong><br>` + sessions[key].map(m=>`<em>${m.role}:</em> ${marked.parseInline(m.content)}`).join("<br>");
+    div.innerHTML = `<strong>${firstUserMsg}...</strong>`;
+    div.onclick = ()=>{
+      currentSession = key;
+      renderSession();
+      historyModal.style.display = "none";
+    }
     historyContent.appendChild(div);
   });
   historyModal.style.display = "flex";
 }
 
-// 点击弹窗关闭
+// 点击弹窗空白处关闭
 historyModal.onclick = (e)=>{
   if(e.target===historyModal) historyModal.style.display = "none";
 }
