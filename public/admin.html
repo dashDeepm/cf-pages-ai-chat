@@ -1,0 +1,31 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Panel</title>
+</head>
+<body>
+  <h1>对话记录后台</h1>
+  <button onclick="loadLogs()">加载记录</button>
+  <pre id="logs"></pre>
+
+  <script>
+    async function loadLogs() {
+      const user = prompt("Admin 用户名：");
+      const pass = prompt("密码：");
+      const res = await fetch("/api/admin", {
+        headers: {
+          Authorization: "Basic " + btoa(user + ":" + pass)
+        }
+      });
+      if (!res.ok) {
+        alert("登录失败");
+        return;
+      }
+      const data = await res.json();
+      document.getElementById("logs").textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>
