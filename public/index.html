@@ -8,7 +8,7 @@
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   background-color: #f7f7f8;
   color: #333;
   display: flex;
@@ -16,21 +16,22 @@ body {
   overflow: hidden;
 }
 
-/* 左侧侧边栏 */
+/* 左侧栏 */
 #sidebar {
   width: 260px;
   background: #202123;
   color: white;
   display: flex;
   flex-direction: column;
-  padding: 10px;
+  padding: 12px;
 }
 #sidebar h2 {
   margin: 10px 0 20px 10px;
   font-size: 18px;
+  font-weight: 600;
 }
 .sidebar-btn {
-  padding: 8px 12px;
+  padding: 10px 14px;
   margin: 5px;
   border: none;
   border-radius: 6px;
@@ -38,6 +39,8 @@ body {
   background: #343541;
   color: #fff;
   text-align: left;
+  font-size: 14px;
+  transition: background 0.2s;
 }
 .sidebar-btn:hover { background: #444654; }
 #history-list {
@@ -50,6 +53,7 @@ body {
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
+  transition: background 0.2s;
 }
 .history-item:hover { background: #343541; }
 .history-item.active { background: #0b93f6; }
@@ -58,27 +62,34 @@ body {
   margin-top: 10px;
 }
 
-/* 聊天区 */
+/* 主聊天区 */
 #main {
   flex: 1;
   display: flex;
   flex-direction: column;
+  background: #fff;
+  position: relative;
 }
 #chat-container {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 .msg {
   margin: 10px 0;
   padding: 12px 16px;
   border-radius: 12px;
   max-width: 80%;
-  line-height: 1.5;
-  white-space: pre-wrap;
+  line-height: 1.6;
   word-wrap: break-word;
+  animation: fadeIn 0.2s ease;
 }
-.user { background: #DCF8C6; align-self: flex-end; }
+.user {
+  background: #DCF8C6;
+  align-self: flex-end;
+}
 .ai {
   background: #fff;
   border: 1px solid #eee;
@@ -99,6 +110,7 @@ body {
   border-radius: 8px;
   border: 1px solid #ccc;
   font-size: 14px;
+  max-height: 200px;
 }
 #send {
   margin-left: 10px;
@@ -110,17 +122,43 @@ body {
   cursor: pointer;
 }
 
-/* markdown */
+/* 右下角按钮 */
+#scroll-bottom {
+  position: absolute;
+  bottom: 90px;
+  right: 20px;
+  background: #0b93f6;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  display: none;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+/* markdown样式 */
 code { background: #eee; padding: 2px 4px; border-radius: 4px; }
 pre {
   background: #282c34;
   color: #f8f8f2;
-  padding: 10px;
+  padding: 12px;
   border-radius: 8px;
   overflow-x: auto;
 }
-@media (max-width: 800px) {
-  #sidebar { width: 200px; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 响应式 */
+@media (max-width: 900px) {
+  #sidebar { display: none; }
+  #main { width: 100%; }
 }
 </style>
 </head>
@@ -136,6 +174,9 @@ pre {
 
 <div id="main">
   <div id="chat-container"></div>
+
+  <button id="scroll-bottom">↓</button>
+
   <div id="input-container">
     <textarea id="input" rows="2" placeholder="输入你的问题..."></textarea>
     <button id="send">发送</button>
@@ -155,119 +196,125 @@ const newSessionBtn = document.getElementById("new-session");
 const clearSessionBtn = document.getElementById("clear-session");
 const clearAllBtn = document.getElementById("clear-all");
 const historyList = document.getElementById("history-list");
+const scrollBtn = document.getElementById("scroll-bottom");
 
 let sessions = JSON.parse(localStorage.getItem("ai_sessions")||"{}");
 let currentSession = localStorage.getItem("ai_current") || Object.keys(sessions)[0] || "default";
 if(!sessions[currentSession]) sessions[currentSession] = [];
 
-function saveSessions(){
+function save(){
   localStorage.setItem("ai_sessions", JSON.stringify(sessions));
   localStorage.setItem("ai_current", currentSession);
 }
 
 function renderHistory(){
-  historyList.innerHTML = "";
+  historyList.innerHTML="";
   const keys = Object.keys(sessions).slice(-100);
   for(const k of keys){
+    const firstMsg = sessions[k].find(m=>m.role==='user')?.content?.slice(0,12) || "新会话";
     const div = document.createElement("div");
-    div.className = "history-item"+(k===currentSession?" active":"");
-    const firstMsg = (sessions[k].find(m=>m.role==='user')?.content||"").slice(0,10) || "新会话";
-    div.textContent = firstMsg;
-    div.onclick = ()=>{
-      currentSession = k;
-      renderHistory();
-      renderChat();
-      saveSessions();
+    div.className="history-item"+(k===currentSession?" active":"");
+    div.textContent=firstMsg;
+    div.onclick=()=>{
+      currentSession=k;
+      renderHistory(); renderChat(); save();
     };
     historyList.appendChild(div);
   }
 }
 
 function renderChat(){
-  chatContainer.innerHTML = "";
+  chatContainer.innerHTML="";
   const msgs = sessions[currentSession]||[];
-  for(const m of msgs) addMsg(m.role, m.content, false);
+  for(const m of msgs) addMsg(m.role,m.content,false);
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
-function addMsg(role, content, save=true){
+function addMsg(role, content, saveMsg=true){
   const div = document.createElement("div");
-  div.className = "msg "+role;
-  div.innerHTML = marked.parse(content);
+  div.className="msg "+role;
+  div.innerHTML=marked.parse(content);
   chatContainer.appendChild(div);
-  if(save){
+  if(saveMsg){
     sessions[currentSession].push({role,content});
-    saveSessions();
+    save();
   }
-  chatContainer.scrollTop = chatContainer.scrollHeight;
   hljs.highlightAll();
 }
 
 async function sendMsg(){
-  const text = input.value.trim();
+  const text=input.value.trim();
   if(!text) return;
   input.value="";
   addMsg("user", text);
 
-  const aiDiv = document.createElement("div");
-  aiDiv.className = "msg ai";
+  const aiDiv=document.createElement("div");
+  aiDiv.className="msg ai";
   chatContainer.appendChild(aiDiv);
   chatContainer.scrollTop = chatContainer.scrollHeight;
 
   sessions[currentSession].push({role:"assistant",content:""});
   const idx = sessions[currentSession].length-1;
-  saveSessions();
+  save();
 
-  const payload = {
-    messages: sessions[currentSession].map(m=>({role:m.role,content:m.content}))
-  };
-
+  const payload={ messages: sessions[currentSession].map(m=>({role:m.role,content:m.content})) };
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: {"Content-Type":"application/json"},
       body: JSON.stringify(payload)
     });
+
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
+    let fullText = "";
+
     while(true){
-      const {value,done} = await reader.read();
+      const {value, done} = await reader.read();
       if(done) break;
-      const chunk = decoder.decode(value);
-      aiDiv.innerHTML += marked.parseInline(chunk);
-      sessions[currentSession][idx].content += chunk;
-      saveSessions();
+      const chunk = decoder.decode(value, {stream:true});
+      fullText += chunk;
+      aiDiv.innerHTML = marked.parse(fullText);
+      sessions[currentSession][idx].content = fullText;
+      save();
       chatContainer.scrollTop = chatContainer.scrollHeight;
+      hljs.highlightAll();
     }
-    hljs.highlightAll();
-  } catch(err){
-    aiDiv.innerHTML = "<i>出错了，请稍后再试。</i>";
+  } catch(e){
+    aiDiv.innerHTML="<i>出错了，请稍后再试。</i>";
   }
 }
 
-// 事件
+// 按钮事件
 sendBtn.onclick = sendMsg;
-input.addEventListener("keydown",e=>{
+input.addEventListener("keydown", e=>{
   if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendMsg(); }
 });
-newSessionBtn.onclick = ()=>{
+newSessionBtn.onclick=()=>{
   const name="session-"+Date.now();
   sessions[name]=[];
   currentSession=name;
-  renderHistory(); renderChat(); saveSessions();
+  renderHistory(); renderChat(); save();
 };
 clearSessionBtn.onclick=()=>{
   sessions[currentSession]=[];
-  renderChat(); saveSessions();
+  renderChat(); save();
 };
 clearAllBtn.onclick=()=>{
   if(confirm("确定清空所有记录？")){
     sessions={};
     currentSession="default";
     sessions[currentSession]=[];
-    renderHistory(); renderChat(); saveSessions();
+    renderHistory(); renderChat(); save();
   }
 };
+
+// 滚动到底部按钮
+chatContainer.addEventListener("scroll",()=>{
+  const nearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 200;
+  scrollBtn.style.display = nearBottom ? "none" : "flex";
+});
+scrollBtn.onclick = ()=> chatContainer.scrollTop = chatContainer.scrollHeight;
 
 // 初始化
 renderHistory();
