@@ -1,63 +1,200 @@
-export async function onRequestPost({ request, env }) {
-  const { messages } = await request.json();
-
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: env.MODEL,
-      messages: [
-        { role: "system", content: env.SYSTEM_PROMPT },
-        ...messages
-      ],
-      max_tokens: parseInt(env.MAX_TOKENS),
-      stream: true
-    })
-  });
-
-  if (!res.body) {
-    return new Response("OpenRouter API body is empty", { status: 500 });
-  }
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop(); // 保留未完整的行
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const dataStr = line.replace(/^data: /, "").trim();
-          if (dataStr === "[DONE]") continue;
-
-          try {
-            const data = JSON.parse(dataStr);
-            const text = data.choices?.[0]?.delta?.content || "";
-            if (text) controller.enqueue(new TextEncoder().encode(text));
-          } catch(e) {
-            console.error("Parse SSE line error:", e, line);
-          }
-        }
-      }
-      controller.close();
-    }
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache",
-    },
-  });
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI Chat</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  background-color: #f7f7f8;
+  color: #333;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
 }
+#sidebar {
+  width: 260px;
+  background: #202123;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+}
+#sidebar h2 { margin: 10px 0 20px 10px; font-size: 18px; font-weight: 600; }
+.sidebar-btn {
+  padding: 10px 14px;
+  margin: 5px 0;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #343541;
+  color: #fff;
+  text-align: left;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+.sidebar-btn:hover { background: #444654; }
+#history-list { flex: 1; overflow-y: auto; margin-top: 10px; }
+.history-item {
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+.history-item:hover { background: #343541; }
+.history-item.active { background: #0b93f6; }
+#clear-all { background: #f44336; margin-top: 10px; }
+
+#main { flex: 1; display: flex; flex-direction: column; background: #fff; position: relative; }
+#chat-container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
+.msg { margin: 10px 0; padding: 12px 16px; border-radius: 12px; max-width: 80%; line-height: 1.6; word-wrap: break-word; animation: fadeIn 0.2s ease; }
+.user { background: #DCF8C6; align-self: flex-end; }
+.ai { background: #fff; border: 1px solid #eee; align-self: flex-start; }
+#input-container { display: flex; padding: 12px 20px; border-top: 1px solid #ddd; background: #fff; }
+#input { flex: 1; resize: none; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; max-height: 200px; }
+#send { margin-left: 10px; background-color: #0b93f6; color: white; border: none; border-radius: 8px; padding: 0 20px; cursor: pointer; }
+
+#scroll-bottom { position: absolute; bottom: 90px; right: 20px; background: #0b93f6; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 20px; display: none; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+
+code { background: #eee; padding: 2px 4px; border-radius: 4px; }
+pre { background: #282c34; color: #f8f8f2; padding: 12px; border-radius: 8px; overflow-x: auto; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 900px) { #sidebar { display: none; } #main { width: 100%; } }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h2>💬 AI Chat</h2>
+  <button class="sidebar-btn" id="new-session">➕ 新建会话</button>
+  <button class="sidebar-btn" id="clear-session">🧹 清空当前</button>
+  <div id="history-list"></div>
+  <button class="sidebar-btn" id="clear-all">❌ 清空所有记录</button>
+</div>
+
+<div id="main">
+  <div id="chat-container"></div>
+  <button id="scroll-bottom">↓</button>
+  <div id="input-container">
+    <textarea id="input" rows="2" placeholder="输入你的问题..."></textarea>
+    <button id="send">发送</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/lib/common.min.js"></script>
+
+<script>
+const chatContainer=document.getElementById("chat-container");
+const input=document.getElementById("input");
+const sendBtn=document.getElementById("send");
+const newSessionBtn=document.getElementById("new-session");
+const clearSessionBtn=document.getElementById("clear-session");
+const clearAllBtn=document.getElementById("clear-all");
+const historyList=document.getElementById("history-list");
+const scrollBtn=document.getElementById("scroll-bottom");
+
+let sessions=JSON.parse(localStorage.getItem("ai_sessions")||"{}");
+let currentSession=localStorage.getItem("ai_current")||Object.keys(sessions)[0]||"default";
+if(!sessions[currentSession]) sessions[currentSession]=[];
+
+function save(){ localStorage.setItem("ai_sessions", JSON.stringify(sessions)); localStorage.setItem("ai_current", currentSession); }
+
+function renderHistory(){
+  historyList.innerHTML="";
+  const keys=Object.keys(sessions).slice(-100);
+  for(const k of keys){
+    const firstMsg=sessions[k].find(m=>m.role==='user')?.content?.slice(0,12)||"新会话";
+    const div=document.createElement("div");
+    div.className="history-item"+(k===currentSession?" active":"");
+    div.textContent=firstMsg;
+    div.onclick=()=>{ currentSession=k; renderHistory(); renderChat(); save(); };
+    historyList.appendChild(div);
+  }
+}
+
+function renderChat(){
+  chatContainer.innerHTML="";
+  const msgs=sessions[currentSession]||[];
+  for(const m of msgs) addMsg(m.role,m.content,false);
+  chatContainer.scrollTop=chatContainer.scrollHeight;
+}
+
+function highlightAll(){ document.querySelectorAll('pre code').forEach(block=>hljs.highlightElement(block)); }
+
+function addMsg(role,content,saveMsg=true){
+  const div=document.createElement("div");
+  div.className="msg "+role;
+  div.innerHTML=marked.parse(content);
+  chatContainer.appendChild(div);
+  if(saveMsg){ sessions[currentSession].push({role,content}); save(); }
+  highlightAll();
+  chatContainer.scrollTop=chatContainer.scrollHeight;
+}
+
+async function sendMsg(){
+  const text=input.value.trim();
+  if(!text) return;
+  input.value="";
+  addMsg("user",text);
+
+  const aiDiv=document.createElement("div");
+  aiDiv.className="msg ai";
+  chatContainer.appendChild(aiDiv);
+  chatContainer.scrollTop=chatContainer.scrollHeight;
+
+  sessions[currentSession].push({role:"assistant",content:""});
+  const idx=sessions[currentSession].length-1;
+  save();
+
+  try{
+    const res=await fetch("/api/chat",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({messages:sessions[currentSession]})
+    });
+
+    if(!res.ok){
+      const errText=await res.text();
+      addMsg("ai","⚠️ API错误: "+errText);
+      return;
+    }
+
+    const reader=res.body.getReader();
+    const decoder=new TextDecoder();
+    let fullText="";
+    while(true){
+      const {value,done}=await reader.read();
+      if(done) break;
+      const chunk=decoder.decode(value,{stream:true});
+      fullText+=chunk;
+      aiDiv.innerHTML=marked.parse(fullText);
+      sessions[currentSession][idx].content=fullText;
+      save();
+      chatContainer.scrollTop=chatContainer.scrollHeight;
+      highlightAll();
+    }
+  }catch(e){
+    addMsg("ai","⚠️ 网络或API错误: "+e.message);
+  }
+}
+
+sendBtn.onclick=sendMsg;
+input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendMsg(); }});
+newSessionBtn.onclick=()=>{ const name="session-"+Date.now(); sessions[name]=[]; currentSession=name; renderHistory(); renderChat(); save(); };
+clearSessionBtn.onclick=()=>{ sessions[currentSession]=[]; renderChat(); save(); };
+clearAllBtn.onclick=()=>{ if(confirm("确定清空所有记录？")){ sessions={}; currentSession="default"; sessions[currentSession]=[]; renderHistory(); renderChat(); save(); } };
+
+chatContainer.addEventListener("scroll",()=>{ scrollBtn.style.display=(chatContainer.scrollHeight-chatContainer.scrollTop-chatContainer.clientHeight<200)?"none":"flex"; });
+scrollBtn.onclick=()=>chatContainer.scrollTop=chatContainer.scrollHeight;
+
+renderHistory(); renderChat();
+</script>
+</body>
+</html>
