@@ -1,42 +1,56 @@
-export async function onRequest(context) {
-  const { request, env } = context;
-  const url = new URL(request.url);
-  const path = url.pathname;
+export async function onRequestPost({ request, env }) {
+  const { messages } = await request.json();
 
-  if (path === "/api/admin") {
-    const auth = request.headers.get("authorization");
-    if (!auth) return new Response("Unauthorized", { status: 401 });
-    const base64 = auth.split(" ")[1];
-    const [user, pass] = atob(base64).split(":");
-    if (user !== env.ADMIN_USER || pass !== env.ADMIN_PASS) {
-      return new Response("Forbidden", { status: 403 });
+  const res = await fetch("https://api.openrouter.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: env.MODEL,
+      messages: [
+        { role: "system", content: env.SYSTEM_PROMPT },
+        ...messages
+      ],
+      max_tokens: parseInt(env.MAX_TOKENS),
+      stream: true // 开启流式输出
+    }),
+  });
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // 每行 JSON 数据
+        const lines = buffer.split("\n");
+        buffer = lines.pop(); // 留下不完整的一行
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const dataStr = line.replace(/^data: /, "").trim();
+          if (dataStr === "[DONE]") continue;
+          try {
+            const data = JSON.parse(dataStr);
+            const text = data?.choices?.[0]?.delta?.content || "";
+            controller.enqueue(new TextEncoder().encode(text));
+          } catch(e) {}
+        }
+      }
+      controller.close();
     }
-    return new Response("[]", { headers: { "Content-Type": "application/json" } });
-  }
+  });
 
-  if (path === "/api/chat") {
-    const { messages } = await request.json();
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: env.MODEL,
-        max_tokens: parseInt(env.MAX_TOKENS),
-        messages: [
-          { role: "system", content: env.SYSTEM_PROMPT },
-          ...messages,
-        ],
-      }),
-    });
-
-    const data = await res.json();
-    return new Response(JSON.stringify(data), {
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  return new Response("Not Found", { status: 404 });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache",
+    },
+  });
 }
