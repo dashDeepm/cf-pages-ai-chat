@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Chat</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 700px; margin: auto; }
+    .msg { margin: 10px 0; padding: 10px; border-radius: 8px; }
+    .user { background: #e1f5fe; text-align: right; }
+    .ai { background: #f1f1f1; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>AI Chat</h1>
+  <div id="chat"></div>
+  <textarea id="input" rows="3" placeholder="输入你的问题..."></textarea>
+  <button id="send">发送</button>
+
+  <script>
+    const chatDiv = document.getElementById("chat");
+    const input = document.getElementById("input");
+    const send = document.getElementById("send");
+
+    let messages = [];
+
+    send.onclick = async () => {
+      const content = input.value.trim();
+      if (!content) return;
+
+      chatDiv.innerHTML += `<div class="msg user">${content}</div>`;
+      messages.push({ role: "user", content });
+      input.value = "";
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages })
+      });
+
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content || "（无回复）";
+      chatDiv.innerHTML += `<div class="msg ai">${reply}</div>`;
+      messages.push({ role: "assistant", content: reply });
+    };
+  </script>
+</body>
+</html>
