@@ -135,8 +135,6 @@ pre { background: #282c34; color: #f8f8f2; padding: 12px; border-radius: 8px; ov
 
 <!-- 库 -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/styles/github-dark.min.css">
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/lib/common.min.js"></script>
 
 <script>
 const chatContainer=document.getElementById("chat-container");
@@ -195,8 +193,6 @@ function renderChat(){
   chatContainer.scrollTop=chatContainer.scrollHeight;
 }
 
-function highlightAll(){ document.querySelectorAll('pre code').forEach(block=>hljs.highlightElement(block)); }
-
 function addMsg(role,content,saveMsg=true){
   if(!content || content.trim()==="") return;
   const div=document.createElement("div");
@@ -208,7 +204,6 @@ function addMsg(role,content,saveMsg=true){
     sessions[currentSession].push({role, content});
     save();
   }
-  highlightAll();
   chatContainer.scrollTop=chatContainer.scrollHeight;
 }
 
@@ -256,7 +251,6 @@ async function sendMsg(){
         save();
       }
       chatContainer.scrollTop=chatContainer.scrollHeight;
-      highlightAll();
     }
   }catch(e){
     addMsg("ai","⚠️ 网络或API错误: "+e.message);
