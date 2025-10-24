@@ -4,150 +4,187 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Chat</title>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    body { background-color: #f9fafb; }
-    .chat-container { max-width: 800px; margin: auto; padding: 1rem; }
-    .message { border-radius: 0.75rem; padding: 1rem; margin-bottom: 1rem; white-space: pre-wrap; }
-    .user { background-color: #dbeafe; text-align: right; }
-    .assistant { background-color: #f3f4f6; }
-    .chat-box { height: 60vh; overflow-y: auto; margin-bottom: 1rem; }
-    .history-item:hover { background-color: #f9fafb; cursor: pointer; }
+    body {
+      margin: 0; font-family: system-ui, sans-serif; background: #f7f8fa; color: #333;
+      display: flex; flex-direction: column; height: 100vh;
+    }
+    header {
+      background: #4f46e5; color: white; padding: 10px 20px; display: flex;
+      justify-content: space-between; align-items: center; font-size: 18px;
+    }
+    main {
+      flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column;
+    }
+    .message {
+      margin-bottom: 15px; padding: 12px 16px; border-radius: 12px; max-width: 80%;
+      line-height: 1.5; word-break: break-word;
+    }
+    .user { background: #4f46e5; color: white; align-self: flex-end; }
+    .assistant { background: white; border: 1px solid #ddd; align-self: flex-start; }
+    footer {
+      display: flex; padding: 12px; background: #fff; border-top: 1px solid #ddd;
+    }
+    footer textarea {
+      flex: 1; resize: none; padding: 10px; border: 1px solid #ccc; border-radius: 8px;
+      font-size: 16px;
+    }
+    footer button {
+      margin-left: 10px; background: #4f46e5; color: white; border: none;
+      padding: 0 20px; border-radius: 8px; cursor: pointer; font-size: 16px;
+    }
+    #historyBtn {
+      background: #10b981; margin-left: 10px;
+    }
+    /* 弹窗 */
+    .modal {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.4); display: none; justify-content: center; align-items: center;
+    }
+    .modal-content {
+      background: white; width: 90%; max-width: 500px; max-height: 80%;
+      overflow-y: auto; border-radius: 10px; padding: 20px;
+    }
+    .modal-content h2 {
+      margin-top: 0; display: flex; justify-content: space-between; align-items: center;
+    }
+    .history-item {
+      padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;
+    }
+    .history-item:hover {
+      background: #f3f4f6;
+    }
+    @media (max-width: 600px) {
+      footer textarea { font-size: 14px; }
+      footer button { font-size: 14px; padding: 0 12px; }
+    }
   </style>
 </head>
 <body>
-  <div class="chat-container">
-    <h1 class="text-2xl font-bold text-center mb-4">💬 AI Chat</h1>
-
-    <div class="flex justify-between mb-4">
-      <button id="newChat" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">新建对话</button>
-      <button id="showHistory" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600">查看历史</button>
-    </div>
-
-    <div id="chatBox" class="chat-box border border-gray-300 rounded-lg bg-white p-4"></div>
-
-    <div class="flex">
-      <textarea id="userInput" class="flex-1 border border-gray-300 rounded-lg p-2 resize-none" rows="2" placeholder="输入你的问题..."></textarea>
-      <button id="sendBtn" class="bg-blue-500 text-white px-4 py-2 ml-2 rounded-lg hover:bg-blue-600">发送</button>
-    </div>
-  </div>
+  <header>
+    <div>AI Chat</div>
+    <button id="historyBtn">历史记录</button>
+  </header>
+  <main id="chat"></main>
+  <footer>
+    <textarea id="input" rows="2" placeholder="输入消息..."></textarea>
+    <button id="sendBtn">发送</button>
+  </footer>
 
   <!-- 历史记录弹窗 -->
-  <div id="historyModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-    <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 p-4 max-h-[80vh] overflow-y-auto">
-      <h2 class="text-xl font-bold mb-4 flex justify-between items-center">
+  <div id="historyModal" class="modal">
+    <div class="modal-content">
+      <h2>
         历史记录
-        <button id="clearHistory" class="text-red-500 hover:underline text-sm">清空所有</button>
+        <button id="clearHistory" style="background:#ef4444;color:white;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;">清空</button>
       </h2>
-      <ul id="historyList" class="divide-y divide-gray-200"></ul>
-      <div class="mt-4 text-right">
-        <button id="closeHistory" class="bg-gray-400 text-white px-4 py-2 rounded-lg hover:bg-gray-500">关闭</button>
-      </div>
+      <div id="historyList"></div>
     </div>
   </div>
 
   <script>
-    const chatBox = document.getElementById("chatBox");
-    const userInput = document.getElementById("userInput");
+    const chatEl = document.getElementById("chat");
+    const inputEl = document.getElementById("input");
     const sendBtn = document.getElementById("sendBtn");
-    const newChatBtn = document.getElementById("newChat");
-    const historyBtn = document.getElementById("showHistory");
-    const historyModal = document.getElementById("historyModal");
-    const closeHistory = document.getElementById("closeHistory");
-    const clearHistory = document.getElementById("clearHistory");
-    const historyList = document.getElementById("historyList");
+    const historyBtn = document.getElementById("historyBtn");
+    const modal = document.getElementById("historyModal");
+    const listEl = document.getElementById("historyList");
+    const clearBtn = document.getElementById("clearHistory");
 
     let messages = [];
-    let history = JSON.parse(localStorage.getItem("chat_history") || "[]");
+    let history = JSON.parse(localStorage.getItem("chatHistory") || "[]");
 
-    function saveHistory() {
-      if (messages.length === 0) return;
-      const title = messages[0]?.content?.slice(0, 10) || "无标题";
-      history.unshift({ title, messages });
-      if (history.length > 100) history.pop();
-      localStorage.setItem("chat_history", JSON.stringify(history));
-    }
-
-    function renderMessages() {
-      chatBox.innerHTML = "";
-      messages.forEach(msg => {
-        const div = document.createElement("div");
-        div.className = `message ${msg.role}`;
-        if (msg.role === "assistant") {
-          div.innerHTML = marked.parse(msg.content);
-        } else {
-          div.textContent = msg.content;
-        }
-        chatBox.appendChild(div);
-      });
-      chatBox.scrollTop = chatBox.scrollHeight;
+    function renderMessage(role, content) {
+      const div = document.createElement("div");
+      div.className = "message " + role;
+      div.innerHTML = marked.parse(content);
+      chatEl.appendChild(div);
+      chatEl.scrollTop = chatEl.scrollHeight;
     }
 
     async function sendMessage() {
-      const content = userInput.value.trim();
-      if (!content) return;
+      const text = inputEl.value.trim();
+      if (!text) return;
+      inputEl.value = "";
+      renderMessage("user", text);
+      messages.push({ role: "user", content: text });
 
-      messages.push({ role: "user", content });
-      renderMessages();
-      userInput.value = "";
+      const aiMsg = document.createElement("div");
+      aiMsg.className = "message assistant";
+      chatEl.appendChild(aiMsg);
 
-      const div = document.createElement("div");
-      div.className = "message assistant";
-      chatBox.appendChild(div);
-
-      const response = await fetch("/api/chat", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages })
       });
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let assistantMsg = "";
+      if (!res.body) {
+        aiMsg.textContent = "⚠️ 无法连接到服务器。";
+        return;
+      }
 
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
       while (true) {
-        const { value, done } = await reader.read();
+        const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value);
-        assistantMsg += chunk;
-        div.innerHTML = marked.parse(assistantMsg);
-        chatBox.scrollTop = chatBox.scrollHeight;
+        fullText += chunk;
+        aiMsg.innerHTML = marked.parse(fullText);
+        chatEl.scrollTop = chatEl.scrollHeight;
       }
 
-      messages.push({ role: "assistant", content: assistantMsg });
-      saveHistory();
+      messages.push({ role: "assistant", content: fullText });
+      saveToHistory();
     }
 
-    function showHistoryModal() {
-      historyList.innerHTML = "";
-      if (history.length === 0) {
-        historyList.innerHTML = "<li class='text-gray-500 text-center py-4'>暂无历史记录</li>";
-      } else {
-        history.forEach((h, i) => {
-          const li = document.createElement("li");
-          li.className = "p-2 history-item";
-          li.textContent = `${i + 1}. ${h.title}`;
-          li.onclick = () => {
-            messages = h.messages;
-            renderMessages();
-            historyModal.classList.add("hidden");
-          };
-          historyList.appendChild(li);
-        });
+    function saveToHistory() {
+      const summary = messages.find(m => m.role === "user")?.content.slice(0, 10) || "新对话";
+      history.unshift({ title: summary, data: messages });
+      if (history.length > 100) history.pop();
+      localStorage.setItem("chatHistory", JSON.stringify(history));
+    }
+
+    function openHistory() {
+      listEl.innerHTML = "";
+      history.forEach((item, idx) => {
+        const div = document.createElement("div");
+        div.className = "history-item";
+        div.textContent = item.title;
+        div.onclick = () => loadHistory(idx);
+        listEl.appendChild(div);
+      });
+      modal.style.display = "flex";
+    }
+
+    function loadHistory(idx) {
+      modal.style.display = "none";
+      chatEl.innerHTML = "";
+      messages = history[idx].data;
+      messages.forEach(m => renderMessage(m.role, m.content));
+    }
+
+    function clearHistory() {
+      if (confirm("确定要清空所有记录吗？")) {
+        localStorage.removeItem("chatHistory");
+        history = [];
+        listEl.innerHTML = "";
       }
-      historyModal.classList.remove("hidden");
     }
 
     sendBtn.onclick = sendMessage;
-    newChatBtn.onclick = () => { messages = []; renderMessages(); };
-    historyBtn.onclick = showHistoryModal;
-    closeHistory.onclick = () => historyModal.classList.add("hidden");
-    clearHistory.onclick = () => {
-      localStorage.removeItem("chat_history");
-      history = [];
-      showHistoryModal();
-    };
+    inputEl.addEventListener("keypress", e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+    historyBtn.onclick = openHistory;
+    modal.onclick = e => { if (e.target === modal) modal.style.display = "none"; };
+    clearBtn.onclick = clearHistory;
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </body>
 </html>
