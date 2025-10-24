@@ -108,7 +108,7 @@ function save(){ localStorage.setItem("ai_sessions", JSON.stringify(sessions)); 
 
 function renderHistory(){
   historyList.innerHTML="";
-  const keys=Object.keys(sessions).slice(-100);
+  const keys=Object.keys(sessions).filter(k=>sessions[k].some(m=>m.content && m.content.trim()!=="")).slice(-100);
   for(const k of keys){
     const firstMsg=sessions[k].find(m=>m.role==='user')?.content?.slice(0,12)||"新会话";
     const div=document.createElement("div");
@@ -122,18 +122,23 @@ function renderHistory(){
 function renderChat(){
   chatContainer.innerHTML="";
   const msgs=sessions[currentSession]||[];
-  for(const m of msgs) addMsg(m.role,m.content,false);
+  for(const m of msgs) if(m.content && m.content.trim()!=="") addMsg(m.role,m.content,false);
   chatContainer.scrollTop=chatContainer.scrollHeight;
 }
 
 function highlightAll(){ document.querySelectorAll('pre code').forEach(block=>hljs.highlightElement(block)); }
 
 function addMsg(role,content,saveMsg=true){
+  if(!content || content.trim()==="") return; // 空内容不保存
   const div=document.createElement("div");
   div.className="msg "+role;
   div.innerHTML=marked.parse(content);
   chatContainer.appendChild(div);
-  if(saveMsg){ sessions[currentSession].push({role,content}); save(); }
+  if(saveMsg){
+    if(!sessions[currentSession]) sessions[currentSession]=[];
+    sessions[currentSession].push({role, content});
+    save();
+  }
   highlightAll();
   chatContainer.scrollTop=chatContainer.scrollHeight;
 }
@@ -170,13 +175,15 @@ async function sendMsg(){
     const decoder=new TextDecoder();
     let fullText="";
     while(true){
-      const {value,done}=await reader.read();
+      const { value, done } = await reader.read();
       if(done) break;
-      const chunk=decoder.decode(value,{stream:true});
-      fullText+=chunk;
-      aiDiv.innerHTML=marked.parse(fullText);
-      sessions[currentSession][idx].content=fullText;
-      save();
+      const chunk = decoder.decode(value,{stream:true});
+      fullText += chunk;
+      if(fullText.trim()!==""){
+        aiDiv.innerHTML=marked.parse(fullText);
+        sessions[currentSession][idx].content=fullText;
+        save();
+      }
       chatContainer.scrollTop=chatContainer.scrollHeight;
       highlightAll();
     }
@@ -186,8 +193,8 @@ async function sendMsg(){
 }
 
 sendBtn.onclick=sendMsg;
-input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendMsg(); }});
-newSessionBtn.onclick=()=>{ const name="session-"+Date.now(); sessions[name]=[]; currentSession=name; renderHistory(); renderChat(); save(); };
+input.addEventListener("keydown", e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendMsg(); } });
+newSessionBtn.onclick=()=>{ const name="session-"+Date.now(); currentSession=name; sessions[currentSession]=[]; renderHistory(); renderChat(); save(); };
 clearSessionBtn.onclick=()=>{ sessions[currentSession]=[]; renderChat(); save(); };
 clearAllBtn.onclick=()=>{ if(confirm("确定清空所有记录？")){ sessions={}; currentSession="default"; sessions[currentSession]=[]; renderHistory(); renderChat(); save(); } };
 
