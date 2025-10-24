@@ -64,7 +64,43 @@ code { background: #eee; padding: 2px 4px; border-radius: 4px; }
 pre { background: #282c34; color: #f8f8f2; padding: 12px; border-radius: 8px; overflow-x: auto; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-@media (max-width: 900px) { #sidebar { display: none; } #main { width: 100%; } }
+/* 移动端按钮与抽屉 */
+#mobile-history-btn {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  background: #0b93f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  z-index: 1000;
+  cursor: pointer;
+}
+#mobile-history-drawer {
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 80%;
+  max-width: 300px;
+  height: 100%;
+  background: #202123;
+  color: white;
+  overflow-y: auto;
+  padding: 12px;
+  z-index: 1001;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+}
+#mobile-history-drawer.show { transform: translateX(0); }
+#mobile-history-drawer button { margin-bottom: 8px; }
+
+@media (max-width: 900px){
+  #sidebar { display: none; }
+  #mobile-history-btn { display: block; }
+}
 </style>
 </head>
 <body>
@@ -86,6 +122,17 @@ pre { background: #282c34; color: #f8f8f2; padding: 12px; border-radius: 8px; ov
   </div>
 </div>
 
+<!-- 移动端历史记录抽屉 -->
+<button id="mobile-history-btn">📜 历史</button>
+<div id="mobile-history-drawer">
+  <button id="mobile-close-drawer">关闭</button>
+  <button class="sidebar-btn" id="mobile-new-session">➕ 新建会话</button>
+  <button class="sidebar-btn" id="mobile-clear-session">🧹 清空当前</button>
+  <div id="mobile-history-list"></div>
+  <button class="sidebar-btn" id="mobile-clear-all">❌ 清空所有记录</button>
+</div>
+
+<!-- 库 -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/styles/github-dark.min.css">
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/lib/common.min.js"></script>
@@ -99,6 +146,15 @@ const clearSessionBtn=document.getElementById("clear-session");
 const clearAllBtn=document.getElementById("clear-all");
 const historyList=document.getElementById("history-list");
 const scrollBtn=document.getElementById("scroll-bottom");
+
+// 移动端
+const mobileBtn = document.getElementById("mobile-history-btn");
+const mobileDrawer = document.getElementById("mobile-history-drawer");
+const mobileClose = document.getElementById("mobile-close-drawer");
+const mobileHistoryList = document.getElementById("mobile-history-list");
+const mobileNewSession = document.getElementById("mobile-new-session");
+const mobileClearSession = document.getElementById("mobile-clear-session");
+const mobileClearAll = document.getElementById("mobile-clear-all");
 
 let sessions=JSON.parse(localStorage.getItem("ai_sessions")||"{}");
 let currentSession=localStorage.getItem("ai_current")||Object.keys(sessions)[0]||"default";
@@ -119,6 +175,19 @@ function renderHistory(){
   }
 }
 
+function renderMobileHistory(){
+  mobileHistoryList.innerHTML="";
+  const keys=Object.keys(sessions).filter(k=>sessions[k].some(m=>m.content && m.content.trim()!=="")).slice(-100);
+  for(const k of keys){
+    const firstMsg=sessions[k].find(m=>m.role==='user')?.content?.slice(0,12)||"新会话";
+    const div=document.createElement("div");
+    div.className="history-item"+(k===currentSession?" active":"");
+    div.textContent=firstMsg;
+    div.onclick=()=>{ currentSession=k; renderChat(); mobileDrawer.classList.remove("show"); save(); };
+    mobileHistoryList.appendChild(div);
+  }
+}
+
 function renderChat(){
   chatContainer.innerHTML="";
   const msgs=sessions[currentSession]||[];
@@ -129,7 +198,7 @@ function renderChat(){
 function highlightAll(){ document.querySelectorAll('pre code').forEach(block=>hljs.highlightElement(block)); }
 
 function addMsg(role,content,saveMsg=true){
-  if(!content || content.trim()==="") return; // 空内容不保存
+  if(!content || content.trim()==="") return;
   const div=document.createElement("div");
   div.className="msg "+role;
   div.innerHTML=marked.parse(content);
@@ -192,14 +261,21 @@ async function sendMsg(){
   }
 }
 
+// 事件绑定
 sendBtn.onclick=sendMsg;
 input.addEventListener("keydown", e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendMsg(); } });
 newSessionBtn.onclick=()=>{ const name="session-"+Date.now(); currentSession=name; sessions[currentSession]=[]; renderHistory(); renderChat(); save(); };
-clearSessionBtn.onclick=()=>{ sessions[currentSession]=[]; renderChat(); save(); };
-clearAllBtn.onclick=()=>{ if(confirm("确定清空所有记录？")){ sessions={}; currentSession="default"; sessions[currentSession]=[]; renderHistory(); renderChat(); save(); } };
-
+clearSessionBtn.onclick=()=>{ sessions[currentSession]=[]; renderChat(); renderHistory(); renderMobileHistory(); save(); };
+clearAllBtn.onclick=()=>{ if(confirm("确定清空所有记录？")){ sessions={}; currentSession="default"; sessions[currentSession]=[]; renderChat(); renderHistory(); renderMobileHistory(); save(); } };
 chatContainer.addEventListener("scroll",()=>{ scrollBtn.style.display=(chatContainer.scrollHeight-chatContainer.scrollTop-chatContainer.clientHeight<200)?"none":"flex"; });
 scrollBtn.onclick=()=>chatContainer.scrollTop=chatContainer.scrollHeight;
+
+// 移动端事件
+mobileBtn.onclick=()=>{ renderMobileHistory(); mobileDrawer.classList.add("show"); };
+mobileClose.onclick=()=>mobileDrawer.classList.remove("show");
+mobileNewSession.onclick=()=>{ const name="session-"+Date.now(); sessions[name]=[]; currentSession=name; renderChat(); renderMobileHistory(); save(); };
+mobileClearSession.onclick=()=>{ sessions[currentSession]=[]; renderChat(); renderMobileHistory(); save(); };
+mobileClearAll.onclick=()=>{ if(confirm("确定清空所有记录？")){ sessions={}; currentSession="default"; sessions[currentSession]=[]; renderChat(); renderMobileHistory(); save(); } };
 
 renderHistory(); renderChat();
 </script>
