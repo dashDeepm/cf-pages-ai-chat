@@ -68,7 +68,6 @@ pre { background: #282c34; color: #f8f8f2; padding: 12px; border-radius: 8px; ov
   display: none;
   position: fixed;
   top: 12px;
-  left: 12px;
   background: #0b93f6;
   color: white;
   border: none;
@@ -76,11 +75,11 @@ pre { background: #282c34; color: #f8f8f2; padding: 12px; border-radius: 8px; ov
   padding: 8px 12px;
   z-index: 1000;
   cursor: pointer;
-  margin-right: 8px;
 }
-#mobile-new-session-btn { left: auto; right: 12px; }
+#mobile-history-btn { left: 12px; }
+#mobile-new-session-btn { right: 12px; }
+
 #mobile-history-drawer {
-  display: none;
   position: fixed;
   top: 0; left: 0;
   width: 80%;
@@ -262,10 +261,10 @@ newSessionBtn.onclick=()=>{ const name="session-"+Date.now(); currentSession=nam
 clearAllBtn.onclick=()=>{ if(confirm("确定清空所有记录？")){ sessions={}; currentSession="default"; sessions[currentSession]=[]; renderChat(); renderHistory(); renderMobileHistory(); save(); } };
 
 // 移动端事件
-mobileBtn.onclick=()=>{ renderMobileHistory(); mobileDrawer.classList.add("show"); };
-mobileClose.onclick=()=>mobileDrawer.classList.remove("show");
-mobileNewBtn.onclick=()=>{ const name="session-"+Date.now(); sessions[name]=[]; currentSession=name; renderChat(); renderHistory(); renderMobileHistory(); save(); };
-mobileClearAll.onclick=()=>{ if(confirm("确定清空所有记录？")){ sessions={}; currentSession="default"; sessions[currentSession]=[]; renderChat(); renderHistory(); renderMobileHistory(); save(); } };
+mobileBtn.onclick = () => { renderMobileHistory(); mobileDrawer.classList.add("show"); };
+mobileClose.onclick = () => mobileDrawer.classList.remove("show");
+mobileNewBtn.onclick = () => { const name="session-"+Date.now(); sessions[name]=[]; currentSession=name; renderChat(); renderHistory(); renderMobileHistory(); save(); };
+mobileClearAll.onclick = () => { if(confirm("确定清空所有记录？")){ sessions={}; currentSession="default"; sessions[currentSession]=[]; renderChat(); renderHistory(); renderMobileHistory(); save(); } };
 
 renderHistory(); renderChat();
 </script>
