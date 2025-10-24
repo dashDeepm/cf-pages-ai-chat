@@ -1,11 +1,11 @@
 export async function onRequestPost({ request, env }) {
   const { messages } = await request.json();
 
-  const apiRes = await fetch("https://api.openrouter.ai/v1/chat/completions", {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model: env.MODEL,
@@ -18,19 +18,23 @@ export async function onRequestPost({ request, env }) {
     })
   });
 
+  if (!res.body) {
+    return new Response("OpenRouter API body is empty", { status: 500 });
+  }
+
   const stream = new ReadableStream({
     async start(controller) {
-      const reader = apiRes.body.getReader();
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
 
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        buffer += decoder.decode(value, { stream: true });
 
+        buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop(); // 保留残余
+        buffer = lines.pop(); // 保留未完整的行
 
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
@@ -39,9 +43,11 @@ export async function onRequestPost({ request, env }) {
 
           try {
             const data = JSON.parse(dataStr);
-            const text = data?.choices?.[0]?.delta?.content || "";
+            const text = data.choices?.[0]?.delta?.content || "";
             if (text) controller.enqueue(new TextEncoder().encode(text));
-          } catch(e) {}
+          } catch(e) {
+            console.error("Parse SSE line error:", e, line);
+          }
         }
       }
       controller.close();
@@ -51,7 +57,7 @@ export async function onRequestPost({ request, env }) {
   return new Response(stream, {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache"
-    }
+      "Cache-Control": "no-cache",
+    },
   });
 }
