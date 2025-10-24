@@ -59,14 +59,12 @@ body {
 #send { margin-left: 10px; background-color: #0b93f6; color: white; border: none; border-radius: 8px; padding: 0 20px; cursor: pointer; }
 #send:disabled { background-color: #8fbce6; cursor: not-allowed; }
 
-#scroll-bottom { position: absolute; bottom: 90px; right: 20px; background: #0b93f6; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 20px; display: none; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-
 code { background: #eee; padding: 2px 4px; border-radius: 4px; }
 pre { background: #282c34; color: #f8f8f2; padding: 12px; border-radius: 8px; overflow-x: auto; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-/* 移动端按钮与抽屉 */
-#mobile-history-btn {
+/* 移动端按钮 */
+#mobile-history-btn, #mobile-new-session-btn {
   display: none;
   position: fixed;
   top: 12px;
@@ -78,7 +76,9 @@ pre { background: #282c34; color: #f8f8f2; padding: 12px; border-radius: 8px; ov
   padding: 8px 12px;
   z-index: 1000;
   cursor: pointer;
+  margin-right: 8px;
 }
+#mobile-new-session-btn { left: auto; right: 12px; }
 #mobile-history-drawer {
   display: none;
   position: fixed;
@@ -100,7 +100,7 @@ pre { background: #282c34; color: #f8f8f2; padding: 12px; border-radius: 8px; ov
 
 @media (max-width: 900px){
   #sidebar { display: none; }
-  #mobile-history-btn { display: block; }
+  #mobile-history-btn, #mobile-new-session-btn { display: block; }
 }
 </style>
 </head>
@@ -109,31 +109,29 @@ pre { background: #282c34; color: #f8f8f2; padding: 12px; border-radius: 8px; ov
 <div id="sidebar">
   <h2>💬 AI Chat</h2>
   <button class="sidebar-btn" id="new-session">➕ 新建会话</button>
-  <button class="sidebar-btn" id="clear-session">🧹 清空当前</button>
   <div id="history-list"></div>
   <button class="sidebar-btn" id="clear-all">❌ 清空所有记录</button>
 </div>
 
 <div id="main">
   <div id="chat-container"></div>
-  <button id="scroll-bottom">↓</button>
   <div id="input-container">
     <textarea id="input" rows="2" placeholder="输入你的问题..."></textarea>
     <button id="send">发送</button>
   </div>
 </div>
 
-<!-- 移动端历史记录抽屉 -->
+<!-- 移动端按钮 -->
 <button id="mobile-history-btn">📜 历史</button>
+<button id="mobile-new-session-btn">➕ 新建会话</button>
+
+<!-- 移动端历史记录抽屉 -->
 <div id="mobile-history-drawer">
   <button id="mobile-close-drawer">关闭</button>
-  <button class="sidebar-btn" id="mobile-new-session">➕ 新建会话</button>
-  <button class="sidebar-btn" id="mobile-clear-session">🧹 清空当前</button>
   <div id="mobile-history-list"></div>
   <button class="sidebar-btn" id="mobile-clear-all">❌ 清空所有记录</button>
 </div>
 
-<!-- 库 -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
 <script>
@@ -141,18 +139,16 @@ const chatContainer=document.getElementById("chat-container");
 const input=document.getElementById("input");
 const sendBtn=document.getElementById("send");
 const newSessionBtn=document.getElementById("new-session");
-const clearSessionBtn=document.getElementById("clear-session");
 const clearAllBtn=document.getElementById("clear-all");
 const historyList=document.getElementById("history-list");
 
 // 移动端
-const mobileBtn = document.getElementById("mobile-history-btn");
-const mobileDrawer = document.getElementById("mobile-history-drawer");
-const mobileClose = document.getElementById("mobile-close-drawer");
-const mobileHistoryList = document.getElementById("mobile-history-list");
-const mobileNewSession = document.getElementById("mobile-new-session");
-const mobileClearSession = document.getElementById("mobile-clear-session");
-const mobileClearAll = document.getElementById("mobile-clear-all");
+const mobileBtn=document.getElementById("mobile-history-btn");
+const mobileNewBtn=document.getElementById("mobile-new-session-btn");
+const mobileDrawer=document.getElementById("mobile-history-drawer");
+const mobileClose=document.getElementById("mobile-close-drawer");
+const mobileHistoryList=document.getElementById("mobile-history-list");
+const mobileClearAll=document.getElementById("mobile-clear-all");
 
 let sessions=JSON.parse(localStorage.getItem("ai_sessions")||"{}");
 let currentSession=localStorage.getItem("ai_current")||Object.keys(sessions)[0]||"default";
@@ -212,7 +208,7 @@ async function sendMsg(){
   if(!text) return;
   input.value="";
   addMsg("user",text);
-  sendBtn.disabled=true; // 禁用发送按钮
+  sendBtn.disabled=true;
 
   const aiDiv=document.createElement("div");
   aiDiv.className="msg ai";
@@ -243,8 +239,8 @@ async function sendMsg(){
     while(true){
       const { value, done } = await reader.read();
       if(done) break;
-      const chunk = decoder.decode(value,{stream:true});
-      fullText += chunk;
+      const chunk=decoder.decode(value,{stream:true});
+      fullText+=chunk;
       if(fullText.trim()!==""){
         aiDiv.innerHTML=marked.parse(fullText);
         sessions[currentSession][idx].content=fullText;
@@ -255,7 +251,7 @@ async function sendMsg(){
   }catch(e){
     addMsg("ai","⚠️ 网络或API错误: "+e.message);
   } finally{
-    sendBtn.disabled=false; // 恢复发送按钮
+    sendBtn.disabled=false;
   }
 }
 
@@ -263,16 +259,12 @@ async function sendMsg(){
 sendBtn.onclick=sendMsg;
 input.addEventListener("keydown", e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendMsg(); } });
 newSessionBtn.onclick=()=>{ const name="session-"+Date.now(); currentSession=name; sessions[currentSession]=[]; renderHistory(); renderChat(); renderMobileHistory(); save(); };
-clearSessionBtn.onclick=()=>{ sessions[currentSession]=[]; renderChat(); renderHistory(); renderMobileHistory(); save(); };
 clearAllBtn.onclick=()=>{ if(confirm("确定清空所有记录？")){ sessions={}; currentSession="default"; sessions[currentSession]=[]; renderChat(); renderHistory(); renderMobileHistory(); save(); } };
-chatContainer.addEventListener("scroll",()=>{ scrollBtn.style.display=(chatContainer.scrollHeight-chatContainer.scrollTop-chatContainer.clientHeight<200)?"none":"flex"; });
-scrollBtn.onclick=()=>chatContainer.scrollTop=chatContainer.scrollHeight;
 
 // 移动端事件
 mobileBtn.onclick=()=>{ renderMobileHistory(); mobileDrawer.classList.add("show"); };
 mobileClose.onclick=()=>mobileDrawer.classList.remove("show");
-mobileNewSession.onclick=()=>{ const name="session-"+Date.now(); sessions[name]=[]; currentSession=name; renderChat(); renderHistory(); renderMobileHistory(); save(); };
-mobileClearSession.onclick=()=>{ sessions[currentSession]=[]; renderChat(); renderHistory(); renderMobileHistory(); save(); };
+mobileNewBtn.onclick=()=>{ const name="session-"+Date.now(); sessions[name]=[]; currentSession=name; renderChat(); renderHistory(); renderMobileHistory(); save(); };
 mobileClearAll.onclick=()=>{ if(confirm("确定清空所有记录？")){ sessions={}; currentSession="default"; sessions[currentSession]=[]; renderChat(); renderHistory(); renderMobileHistory(); save(); } };
 
 renderHistory(); renderChat();
