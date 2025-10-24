@@ -99,6 +99,15 @@ header {
   cursor: pointer;
 }
 .history-item:hover { background: #f0f0f0; }
+#clear-all-history {
+  margin-bottom: 10px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: #f44336;
+  color: white;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -220,6 +229,21 @@ clearSessionBtn.onclick = ()=>{
 // 查看历史记录按钮
 viewHistoryBtn.onclick = ()=>{
   historyContent.innerHTML = "";
+  
+  // 清空所有记录按钮
+  const clearAllBtn = document.createElement("button");
+  clearAllBtn.id = "clear-all-history";
+  clearAllBtn.textContent = "清空所有记录";
+  clearAllBtn.onclick = ()=>{
+    if(confirm("确定要清空所有历史记录吗？")){
+      sessions = {};
+      localStorage.removeItem("ai_sessions");
+      historyModal.style.display = "none";
+      renderSession();
+    }
+  }
+  historyContent.appendChild(clearAllBtn);
+
   const keys = Object.keys(sessions).reverse().slice(0,100); // 最新100条会话
   keys.forEach(key=>{
     const firstUserMsg = (sessions[key].find(m=>m.role==='user')?.content||"").slice(0,10);
@@ -233,6 +257,7 @@ viewHistoryBtn.onclick = ()=>{
     }
     historyContent.appendChild(div);
   });
+  
   historyModal.style.display = "flex";
 }
 
